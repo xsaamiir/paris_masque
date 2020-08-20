@@ -93,6 +93,7 @@ flutter:
     - family: Montserrat
       fonts:
         - asset: assets/fonts/Montserrat/Montserrat-Regular.ttf
+        - asset: assets/fonts/Montserrat/Montserrat-Bold.ttf
 
 # flutter pub run flutter_launcher_icons:main
 flutter_icons:

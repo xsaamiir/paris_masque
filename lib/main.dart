@@ -8,6 +8,9 @@ import 'package:package_info/package_info.dart';
 import 'package:paris_masque/geofencing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+const privacy =
+    "L'application ne collecte ni sauvegarde aucune de vos données. Votre position ne quitte jamais votre portable, tous les traitements sont fait sur votre appareil.";
+
 void main() {
   runApp(App());
 }
@@ -74,7 +77,7 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-enum _HomePageStatus { initial, loading, success }
+enum _HomePageStatus { initial, loading, success, error_geolocation }
 
 class _HomePageState extends State<HomePage> {
   List<GeoJsonFeature> _matchedMaskLocations = [];
@@ -104,7 +107,18 @@ class _HomePageState extends State<HomePage> {
       _status = _HomePageStatus.loading;
     });
 
-    final position = await _getCurrentPosition();
+    var position;
+
+    // In case the user doesn't allow access to the device's location.
+    try {
+      position = await _getCurrentPosition();
+    } catch (e) {
+      setState(() {
+        _status = _HomePageStatus.error_geolocation;
+      });
+      return;
+    }
+
     final geofencing = await Geofencing.fromString(await _loadGeoJSON());
     final matchedMaskLocations = await geofencing.contains(position);
 
@@ -157,8 +171,45 @@ class _HomePageState extends State<HomePage> {
                     if (this._status == _HomePageStatus.success)
                       ShouldWearMask(this._matchedMaskLocations),
                     SizedBox(height: 16),
-                    if (this._status == _HomePageStatus.success)
-                      Text("Glisser l'écran vers le bas pour actualiser")
+                    if (this._status != _HomePageStatus.loading)
+                      Text("Glisser l'écran vers le bas pour actualiser"),
+                    if (this._status == _HomePageStatus.error_geolocation)
+                      Column(
+                        children: [
+                          Text(
+                            "💥",
+                            style: TextStyle(fontSize: 50),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 10),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8, left: 8),
+                            child: Text(
+                              "L'application a besoin de votre position pour fonctionner",
+                              style: TextStyle(fontSize: 20),
+                              softWrap: true,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8, left: 8),
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(children: [
+                                TextSpan(
+                                  text: "Assurez-vous\n",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                TextSpan(text: privacy + "\n\n")
+                              ]),
+                            ),
+                          )
+                        ],
+                      ),
                   ],
                 ),
               ],
@@ -222,8 +273,6 @@ class _HelpDialog extends StatelessWidget {
     final name = 'Paris Masque';
     final description =
         "Paris Masque vous permet de savoir à tout moment si vous êtes dans une zone de Paris ou le port du masque est obligatoire.\n\n";
-    final privacy =
-        "L'application ne sauvegarde aucune de vos données.\nVotre position ne quitte jamais votre portable car tous les traitement sont fait sur votre appareil.\n\n";
     final legalese = 'Par samir elsharkawy';
     final repoUrl = "https://github.com/sharkyze/paris_masque";
     final repoText = "dépôt GitHub";
@@ -269,7 +318,7 @@ class _HelpDialog extends StatelessWidget {
               text: TextSpan(
                 children: [
                   TextSpan(style: bodyTextStyle, text: description),
-                  TextSpan(style: bodyTextStyle, text: privacy),
+                  TextSpan(style: bodyTextStyle, text: privacy + "\n\n"),
                   TextSpan(style: bodyTextStyle, text: seeSourceFirst),
                   TextSpan(
                     style: bodyTextStyle.copyWith(color: colorScheme.primary),
