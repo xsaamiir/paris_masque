@@ -55,6 +55,20 @@ class Layout extends StatelessWidget {
   }
 }
 
+/// urlLauncher returns a function that when executed,
+/// opens a given url in the web browser.
+Future<void> Function() urlLauncher(String url) {
+  Future<void> launcher() async {
+    if (await canLaunch(url)) {
+      await launch(url, forceSafariVC: false);
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
+  return launcher;
+}
+
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
@@ -112,6 +126,12 @@ class _HomePageState extends State<HomePage> {
     // than having to individually change instances of widgets.
     return Layout(
       appBarActions: [
+        IconButton(
+          icon: const Icon(Icons.map),
+          tooltip: 'Voir la carte',
+          onPressed:
+              urlLauncher("https://capgeo.sig.paris.fr/Apps/ZonesMasque/"),
+        ),
         IconButton(
           icon: const Icon(Icons.help),
           tooltip: 'Aide',
@@ -224,16 +244,6 @@ class _HelpDialog extends StatelessWidget {
     final createTicketFirst = createTicket.substring(0, ticketLinkIndex);
     final createTicketSecond = createTicket.substring(ticketLinkIndexEnd);
 
-    Future<void> Function() _urlLauncher(String url) {
-      Future<void> launcher() async {
-        if (await canLaunch(url)) {
-          await launch(url, forceSafariVC: false);
-        }
-      }
-
-      return launcher;
-    }
-
     return AlertDialog(
       backgroundColor: colorScheme.background,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -265,7 +275,7 @@ class _HelpDialog extends StatelessWidget {
                     style: bodyTextStyle.copyWith(color: colorScheme.primary),
                     text: repoText,
                     recognizer: TapGestureRecognizer()
-                      ..onTap = _urlLauncher(repoUrl),
+                      ..onTap = urlLauncher(repoUrl),
                   ),
                   TextSpan(style: bodyTextStyle, text: seeSourceSecond),
                   TextSpan(style: bodyTextStyle, text: createTicketFirst),
@@ -273,7 +283,7 @@ class _HelpDialog extends StatelessWidget {
                     style: bodyTextStyle.copyWith(color: colorScheme.primary),
                     text: ticketText,
                     recognizer: TapGestureRecognizer()
-                      ..onTap = _urlLauncher(ticketUrl),
+                      ..onTap = urlLauncher(ticketUrl),
                   ),
                   TextSpan(style: bodyTextStyle, text: createTicketSecond),
                 ],
