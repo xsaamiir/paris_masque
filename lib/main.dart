@@ -31,6 +31,27 @@ class App extends StatelessWidget {
   }
 }
 
+class Layout extends StatelessWidget {
+  final Widget body;
+  final List<Widget> appBarActions;
+
+  const Layout({Key key, @required this.body, this.appBarActions})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).primaryColor,
+      appBar: AppBar(
+        elevation: 0.0,
+        bottomOpacity: 0.0,
+        actions: this.appBarActions,
+      ),
+      body: this.body,
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
@@ -86,19 +107,18 @@ class _HomePageState extends State<HomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).primaryColor,
-              Theme.of(context).primaryColor.withOpacity(.6),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.9],
+    return Layout(
+      appBarActions: [
+        IconButton(
+          icon: const Icon(Icons.help),
+          tooltip: 'Aide',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => HelpPage()),
           ),
         ),
+      ],
+      body: Container(
         child: Center(
           child: RefreshIndicator(
             onRefresh: _checkShouldWearMask,
@@ -158,5 +178,16 @@ class ShouldWearMask extends StatelessWidget {
         ),
       )
     ]);
+  }
+}
+
+class HelpPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Layout(
+      body: Center(
+        child: Text("écran d'aide"),
+      ),
+    );
   }
 }
