@@ -1,9 +1,12 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:geojson/geojson.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geopoint/geopoint.dart';
+import 'package:package_info/package_info.dart';
 import 'package:paris_masque/geofencing.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(App());
@@ -112,10 +115,7 @@ class _HomePageState extends State<HomePage> {
         IconButton(
           icon: const Icon(Icons.help),
           tooltip: 'Aide',
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => HelpPage()),
-          ),
+          onPressed: () => showAboutDialog(context: context),
         ),
       ],
       body: Container(
@@ -181,13 +181,138 @@ class ShouldWearMask extends StatelessWidget {
   }
 }
 
-class HelpPage extends StatelessWidget {
+void showAboutDialog({
+  @required BuildContext context,
+}) {
+  assert(context != null);
+  showDialog<void>(
+    context: context,
+    builder: (context) => _HelpDialog(),
+  );
+}
+
+class _HelpDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Layout(
-      body: Center(
-        child: Text("écran d'aide"),
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final bodyTextStyle =
+        textTheme.bodyText1.apply(color: colorScheme.onPrimary);
+
+    final name = 'Paris Masque';
+    final description =
+        "Paris Masque vous permet de savoir à tout moment si vous êtes dans une zone de Paris ou le port du masque est obligatoire.\n\n";
+    final privacy =
+        "L'application ne sauvegarde aucune de vos données.\nVotre position ne quitte jamais votre portable car tous les traitement sont fait sur votre appareil.\n\n";
+    final legalese = 'Par samir elsharkawy';
+    final repoUrl = "https://github.com/sharkyze/paris_masque";
+    final repoText = "dépôt GitHub";
+    final seeSource =
+        "L'application est open source, c'est à dire vous pouvez consulter le code source sur le dépôt GitHub.\n\n";
+    final createTicket =
+        "Si vous avez la moindre question, problème ou vous voulez voir une nouvelle fonctionnalité, n'hésitez pas créer un ticket ici.";
+    final ticketText = "n'hésitez pas créer un ticket ici";
+    final ticketUrl = "https://github.com/sharkyze/paris_masque/issues/new";
+
+    final repoLinkIndex = seeSource.indexOf(repoText);
+    final repoLinkIndexEnd = repoLinkIndex + repoText.length;
+    final seeSourceFirst = seeSource.substring(0, repoLinkIndex);
+    final seeSourceSecond = seeSource.substring(repoLinkIndexEnd);
+
+    final ticketLinkIndex = createTicket.indexOf(ticketText);
+    final ticketLinkIndexEnd = ticketLinkIndex + ticketText.length;
+    final createTicketFirst = createTicket.substring(0, ticketLinkIndex);
+    final createTicketSecond = createTicket.substring(ticketLinkIndexEnd);
+
+    Future<void> Function() _urlLauncher(String url) {
+      Future<void> launcher() async {
+        if (await canLaunch(url)) {
+          await launch(url, forceSafariVC: false);
+        }
+      }
+
+      return launcher;
+    }
+
+    return AlertDialog(
+      backgroundColor: colorScheme.background,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              name,
+              style: textTheme.headline5.apply(color: colorScheme.onPrimary),
+            ),
+            SizedBox(height: 5),
+            FutureBuilder(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) => Text(
+                snapshot.hasData ? 'version: ${snapshot.data.version}' : "",
+              ),
+            ),
+            SizedBox(height: 24),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(style: bodyTextStyle, text: description),
+                  TextSpan(style: bodyTextStyle, text: privacy),
+                  TextSpan(style: bodyTextStyle, text: seeSourceFirst),
+                  TextSpan(
+                    style: bodyTextStyle.copyWith(color: colorScheme.primary),
+                    text: repoText,
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = _urlLauncher(repoUrl),
+                  ),
+                  TextSpan(style: bodyTextStyle, text: seeSourceSecond),
+                  TextSpan(style: bodyTextStyle, text: createTicketFirst),
+                  TextSpan(
+                    style: bodyTextStyle.copyWith(color: colorScheme.primary),
+                    text: ticketText,
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = _urlLauncher(ticketUrl),
+                  ),
+                  TextSpan(style: bodyTextStyle, text: createTicketSecond),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
+      actions: [
+        FlatButton(
+          textColor: colorScheme.primary,
+          child: Text("Voir les licences"),
+          onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (context) => Theme(
+                data: Theme.of(context).copyWith(
+                  textTheme: Typography.material2018(
+                    platform: Theme.of(context).platform,
+                  ).black,
+                  scaffoldBackgroundColor: Colors.white,
+                ),
+                child: LicensePage(
+                  applicationName: name,
+                  applicationLegalese: legalese,
+                  applicationIcon: Image.asset(
+                    "assets/images/medical-mask.png",
+                    height: 200,
+                  ),
+                ),
+              ),
+            ));
+          },
+        ),
+        FlatButton(
+          textColor: colorScheme.primary,
+          child: Text("Fermer"),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 }

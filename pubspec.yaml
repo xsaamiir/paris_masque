@@ -32,6 +32,8 @@ dependencies:
   geolocator: ^5.3.2+2
   geopoint: ^0.7.1
   geojson: ^0.9.1
+  package_info: ^0.4.1
+  url_launcher: ^5.5.0
 
 dev_dependencies:
   flutter_test:
