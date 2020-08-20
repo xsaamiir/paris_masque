@@ -55,9 +55,12 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    # Source:
+    # Sources:
     #   - https://www.data.gouv.fr/fr/datasets/coronavirus-secteurs-ou-le-port-du-masque-est-obligatoire/
     #   - https://parisdata.opendatasoft.com/explore/dataset/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches/information/?disjunctive.nom&disjunctive.nom_long&disjunctive.ardt&basemap=jawg.dark&location=13,48.85824,2.3369
+    #   - https://www.iconfinder.com/icons/5952750/coronavirus_mask_medical_safety_icon
+    #   - https://www.iconfinder.com/icons/2903193/eiffeltower_hearts_love_paris_icon
+    - assets/images/medical-mask.png
     - assets/data/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches.geojson
 
 
@@ -93,7 +96,6 @@ flutter:
 
 # flutter pub run flutter_launcher_icons:main
 flutter_icons:
-  # https://www.iconfinder.com/icons/5952750/coronavirus_mask_medical_safety_icon
   image_path: 'assets/images/medical-mask.png'
   android: true
   ios: true
