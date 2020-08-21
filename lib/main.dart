@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:geojson/geojson.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geopoint/geopoint.dart';
+import 'package:mapbox_gl/mapbox_gl.dart';
 import 'package:package_info/package_info.dart';
 import 'package:paris_masque/geofencing.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -143,8 +144,10 @@ class _HomePageState extends State<HomePage> {
         IconButton(
           icon: const Icon(Icons.map),
           tooltip: 'Voir la carte',
-          onPressed:
-              urlLauncher("https://capgeo.sig.paris.fr/Apps/ZonesMasque/"),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => MapPage()),
+          ),
         ),
         IconButton(
           icon: const Icon(Icons.help),
@@ -372,6 +375,44 @@ class _HelpDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ],
+    );
+  }
+}
+
+class MapPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const FullMap();
+  }
+}
+
+class FullMap extends StatefulWidget {
+  const FullMap();
+
+  @override
+  State createState() => FullMapState();
+}
+
+class FullMapState extends State<FullMap> {
+  MapboxMapController mapController;
+
+  void _onMapCreated(MapboxMapController controller) {
+    mapController = controller;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Layout(
+      body: MapboxMap(
+        onMapCreated: _onMapCreated,
+        myLocationEnabled: true,
+        myLocationRenderMode: MyLocationRenderMode.NORMAL,
+        minMaxZoomPreference: MinMaxZoomPreference(9.0, null),
+        initialCameraPosition: CameraPosition(
+          target: LatLng(48.8566, 2.333),
+          zoom: 10.7,
+        ),
+      ),
     );
   }
 }
