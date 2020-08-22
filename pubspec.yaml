@@ -17,7 +17,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # https://dart.dev/tools/pub/pubspec#version
 # https://flutter.dev/docs/deployment/android#updating-the-apps-version-number
-version: 0.0.1+1
+version: 0.0.2+1
 
 environment:
   sdk: ">=2.7.0 <3.0.0"
@@ -35,6 +35,10 @@ dependencies:
   geojson: ^0.9.1
   package_info: ^0.4.1
   url_launcher: ^5.5.0
+  flutter_map: ^0.10.1+1
+  user_location:
+    git:
+      url: https://github.com/igaurab/user_location_plugin.git
 
 dev_dependencies:
   flutter_test:

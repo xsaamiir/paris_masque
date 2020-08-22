@@ -5,9 +5,9 @@ import 'package:geopoint/geopoint.dart';
 import 'package:stream_transform/stream_transform.dart';
 
 class Geofencing {
-  List<GeoJsonFeature> _features;
+  List<GeoJsonFeature> features;
 
-  Geofencing(this._features);
+  Geofencing(this.features);
 
   /// Public factory
   static Future<Geofencing> fromFile(File file) async {
@@ -28,7 +28,7 @@ class Geofencing {
 
     final geoJsonPoint = GeoJsonPoint(geoPoint: point);
 
-    return await Stream.fromIterable(this._features)
+    return await Stream.fromIterable(this.features)
         .asyncWhere((e) async => (await GeoJson()
                 .geofencePolygon(polygon: e.geometry, points: [geoJsonPoint]))
             .isNotEmpty)

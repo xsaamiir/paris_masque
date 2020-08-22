@@ -1,21 +1,34 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geojson/geojson.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geopoint/geopoint.dart';
+import 'package:latlong/latlong.dart';
 import 'package:package_info/package_info.dart';
 import 'package:paris_masque/geofencing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:user_location/user_location.dart';
 
 const privacy =
     "L'application ne collecte ni sauvegarde aucune de vos données. Votre position ne quitte jamais votre portable, tous les traitements sont fait sur votre appareil.";
+const mapboxAccessToken =
+    "pk.eyJ1Ijoic2hhcmt5emUiLCJhIjoiY2tlNDl3ZzhjMDJwczMycWdnMGhwdmRvYyJ9.wkVys6dgiAyPJ9nxFg5syQ";
 
 void main() {
   runApp(App());
 }
 
 class App extends StatelessWidget {
+  static Future<Geofencing> _loadGeoJSON() async {
+    final data = await rootBundle.loadString(
+        'assets/data/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches.geojson');
+    return Geofencing.fromString(data);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,14 +38,50 @@ class App extends StatelessWidget {
         // Describes the contrast of a theme or color palette.
         // Dark will require a light text color to achieve readable contrast.
         brightness: Brightness.dark,
-        primaryColor: Color(0x0055A4).withOpacity(1),
-        accentColor: Color(0xef4135).withOpacity(1),
+        primaryColor: const Color(0x000055a4).withOpacity(1),
+        accentColor: const Color(0x00ef4135).withOpacity(1),
         // This makes the visual density adapt to the platform that you run
         // the app on. For desktop platforms, the controls will be smaller and
         // closer together (more dense) than on mobile platforms.
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: HomePage(),
+      home: FutureBuilder(
+        future: _loadGeoJSON(),
+        builder: (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
+          Widget widget;
+
+          if (snapshot.hasData) {
+            widget = HomePage(geofencing: snapshot.data);
+          } else if (snapshot.hasError) {
+            widget = Text(
+                "Oups, une erreur est survenue, veuillez réessayer ultérieurement 🤦‍♀️🤦‍♀️",
+                style: TextStyle(fontSize: 20));
+          } else {
+            widget = Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    child: CircularProgressIndicator(),
+                    width: 50,
+                    height: 50,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Text(
+                      'Données en cours de téléchargement 📡',
+                      style: TextStyle(fontSize: 20),
+                    ),
+                  )
+                ],
+              ),
+            );
+          }
+
+          return widget;
+        },
+      ),
     );
   }
 }
@@ -73,6 +122,10 @@ Future<void> Function() urlLauncher(String url) {
 }
 
 class HomePage extends StatefulWidget {
+  final Geofencing geofencing;
+
+  const HomePage({Key key, @required this.geofencing}) : super(key: key);
+
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -87,11 +140,6 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkShouldWearMask());
-  }
-
-  static Future<String> _loadGeoJSON() async {
-    return await rootBundle.loadString(
-        'assets/data/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches.geojson');
   }
 
   Future<GeoPoint> _getCurrentPosition() async {
@@ -119,8 +167,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final geofencing = await Geofencing.fromString(await _loadGeoJSON());
-    final matchedMaskLocations = await geofencing.contains(position);
+    final matchedMaskLocations = await widget.geofencing.contains(position);
 
     debugPrint("should user wear mask ? $matchedMaskLocations");
 
@@ -143,8 +190,12 @@ class _HomePageState extends State<HomePage> {
         IconButton(
           icon: const Icon(Icons.map),
           tooltip: 'Voir la carte',
-          onPressed:
-              urlLauncher("https://capgeo.sig.paris.fr/Apps/ZonesMasque/"),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MapPage(geofencing: widget.geofencing),
+            ),
+          ),
         ),
         IconButton(
           icon: const Icon(Icons.help),
@@ -372,6 +423,89 @@ class _HelpDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ],
+    );
+  }
+}
+
+class MapPage extends StatefulWidget {
+  final Geofencing geofencing;
+
+  MapPage({Key key, @required this.geofencing}) : super(key: key);
+
+  @override
+  _MapPageState createState() => _MapPageState();
+}
+
+class _MapPageState extends State<MapPage> {
+  MapController mapController;
+  PolygonLayerOptions polygonLayer = PolygonLayerOptions(polygons: []);
+  UserLocationOptions userLocationOptions;
+  List<Marker> markers = [];
+
+  Future<void> loadData() async {
+    final polys = widget.geofencing.features
+        .map((e) => e.geometry as GeoJsonPolygon)
+        .expand(
+          (e) => e.geoSeries.map(
+            (element) => Polygon(
+              points: element.toLatLng().toList(),
+              color: Theme.of(context).accentColor.withOpacity(0.5),
+            ),
+          ),
+        )
+        .toList();
+
+    setState(() {
+      polygonLayer = PolygonLayerOptions(polygons: polys);
+    });
+  }
+
+  @override
+  void initState() {
+    mapController = MapController();
+    loadData();
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mapboxLayer = TileLayerOptions(
+      urlTemplate: "https://api.mapbox.com/styles/v1/"
+          "{id}/tiles/{z}/{x}/{y}@2x?access_token={accessToken}",
+      additionalOptions: {
+        'accessToken': mapboxAccessToken,
+        'id': 'mapbox/streets-v11',
+      },
+    );
+
+    userLocationOptions = UserLocationOptions(
+      context: context,
+      mapController: mapController,
+      markers: markers,
+      updateMapLocationOnPositionChange: true,
+      showMoveToCurrentLocationFloatingActionButton: true,
+      zoomToCurrentLocationOnLoad: true,
+    );
+
+    return Layout(
+      body: SafeArea(
+        child: FlutterMap(
+          mapController: mapController,
+          options: MapOptions(
+            center: LatLng(48.8566, 2.333),
+            zoom: 11.6,
+            minZoom: 10.5,
+            maxZoom: 16,
+            plugins: [UserLocationPlugin()],
+          ),
+          layers: [
+            mapboxLayer,
+            polygonLayer,
+            MarkerLayerOptions(markers: markers),
+            userLocationOptions,
+          ],
+        ),
+      ),
     );
   }
 }
