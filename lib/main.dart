@@ -1,15 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geojson/geojson.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geopoint/geopoint.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong/latlong.dart';
 import 'package:package_info/package_info.dart';
 import 'package:paris_masque/geofencing.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:user_location/user_location.dart';
 
@@ -17,16 +19,48 @@ const privacy =
     "L'application ne collecte ni sauvegarde aucune de vos données. Votre position ne quitte jamais votre portable, tous les traitements sont fait sur votre appareil.";
 const mapboxAccessToken =
     "pk.eyJ1Ijoic2hhcmt5emUiLCJhIjoiY2tlNDl3ZzhjMDJwczMycWdnMGhwdmRvYyJ9.wkVys6dgiAyPJ9nxFg5syQ";
+const geoJSONDataUrl =
+    "https://raw.githubusercontent.com/sharkyze/paris_masque/master/assets/data/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches.geojson";
 
 void main() {
   runApp(App());
 }
 
 class App extends StatelessWidget {
-  static Future<Geofencing> _loadGeoJSON() async {
-    final data = await rootBundle.loadString(
-        'assets/data/coronavirus-port-du-masque-obligatoire-lieux-places-et-marches.geojson');
+  Future<Geofencing> _loadGeoJSON() async {
+    Directory tempDir = await getTemporaryDirectory();
+    String tempPath = tempDir.path;
+    File cacheFile = File("$tempPath/data.geojson");
+
+    String data;
+    if (await cacheFile.exists()) {
+      debugPrint("loading data from cache file");
+      data = await _loadGeoJSONLocally(cacheFile);
+    } else {
+      debugPrint("loading data from network");
+      data = await _loadGeoJSONRemotely();
+      cacheFile.writeAsString(data);
+    }
+
     return Geofencing.fromString(data);
+  }
+
+  static Future<String> _loadGeoJSONRemotely() async {
+    final res = await http.get(geoJSONDataUrl);
+
+    if (res.statusCode == 200) {
+      // If the server did return a 200 OK response,
+      // then parse the JSON.
+      return res.body;
+    } else {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+      throw Exception('Failed to load geojson data from remote source');
+    }
+  }
+
+  static Future<String> _loadGeoJSONLocally(File file) async {
+    return file.readAsString();
   }
 
   @override
@@ -48,39 +82,70 @@ class App extends StatelessWidget {
       home: FutureBuilder(
         future: _loadGeoJSON(),
         builder: (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
-          Widget widget;
-
           if (snapshot.hasData) {
-            widget = HomePage(geofencing: snapshot.data);
+            return HomePage(geofencing: snapshot.data);
           } else if (snapshot.hasError) {
-            widget = Text(
-                "Oups, une erreur est survenue, veuillez réessayer ultérieurement 🤦‍♀️🤦‍♀️",
-                style: TextStyle(fontSize: 20));
+            return ErrorPage();
           } else {
-            widget = Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    child: CircularProgressIndicator(),
-                    width: 50,
-                    height: 50,
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16),
-                    child: Text(
-                      'Données en cours de téléchargement 📡',
-                      style: TextStyle(fontSize: 20),
-                    ),
-                  )
-                ],
-              ),
-            );
+            return SplashPage();
           }
-
-          return widget;
         },
+      ),
+    );
+  }
+}
+
+class CenteredColumn extends StatelessWidget {
+  final List<Widget> children;
+
+  const CenteredColumn({Key key, @required this.children}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: this.children,
+      ),
+    );
+  }
+}
+
+class SplashPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Layout(
+      body: CenteredColumn(
+        children: [
+          SizedBox(
+            child: Image.asset("assets/images/paris-masque-square.png"),
+            height: MediaQuery.of(context).size.height * 0.3,
+          ),
+          SizedBox(height: 20),
+          SizedBox(
+            child: CircularProgressIndicator(),
+            width: 40,
+            height: 40,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ErrorPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Layout(
+      body: CenteredColumn(
+        children: [
+          Text(
+            "Oups, une erreur est survenue 😢. Veuillez réessayer ultérieurement...",
+            style: TextStyle(fontSize: 20),
+            textAlign: TextAlign.center,
+          )
+        ],
       ),
     );
   }
@@ -204,67 +269,64 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
       body: Container(
-        child: Center(
-          child: RefreshIndicator(
-            onRefresh: _checkShouldWearMask,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ListView(),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    if (this._status == _HomePageStatus.loading)
-                      Text(
-                        "Vérification en cours... ⌛",
-                        style: TextStyle(fontSize: 20),
-                      ),
-                    if (this._status == _HomePageStatus.success)
-                      ShouldWearMask(this._matchedMaskLocations),
-                    SizedBox(height: 16),
-                    if (this._status != _HomePageStatus.loading)
-                      Text("Glisser l'écran vers le bas pour actualiser"),
-                    if (this._status == _HomePageStatus.error_geolocation)
-                      Column(
-                        children: [
-                          Text(
-                            "💥",
-                            style: TextStyle(fontSize: 50),
+        child: RefreshIndicator(
+          onRefresh: _checkShouldWearMask,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ListView(),
+              CenteredColumn(
+                children: <Widget>[
+                  if (this._status == _HomePageStatus.loading)
+                    Text(
+                      "Vérification en cours... ⌛",
+                      style: TextStyle(fontSize: 20),
+                    ),
+                  if (this._status == _HomePageStatus.success)
+                    ShouldWearMask(this._matchedMaskLocations),
+                  SizedBox(height: 16),
+                  if (this._status != _HomePageStatus.loading)
+                    Text("Glisser l'écran vers le bas pour actualiser"),
+                  if (this._status == _HomePageStatus.error_geolocation)
+                    Column(
+                      children: [
+                        Text(
+                          "💥",
+                          style: TextStyle(fontSize: 50),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8, left: 8),
+                          child: Text(
+                            "L'application a besoin de votre position pour fonctionner",
+                            style: TextStyle(fontSize: 20),
+                            softWrap: true,
                             textAlign: TextAlign.center,
                           ),
-                          SizedBox(height: 10),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8, left: 8),
-                            child: Text(
-                              "L'application a besoin de votre position pour fonctionner",
-                              style: TextStyle(fontSize: 20),
-                              softWrap: true,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          SizedBox(height: 16),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8, left: 8),
-                            child: RichText(
-                              textAlign: TextAlign.center,
-                              text: TextSpan(children: [
-                                TextSpan(
-                                  text: "Assurez-vous\n",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                        ),
+                        SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8, left: 8),
+                          child: RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(children: [
+                              TextSpan(
+                                text: "Assurez-vous\n",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                TextSpan(text: privacy + "\n\n")
-                              ]),
-                            ),
-                          )
-                        ],
-                      ),
-                  ],
-                ),
-              ],
-            ),
+                              ),
+                              TextSpan(text: privacy + "\n\n")
+                            ]),
+                          ),
+                        )
+                      ],
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -285,21 +347,23 @@ class ShouldWearMask extends StatelessWidget {
         ? _matchedMaskLocations.first.properties["nom_long"]
         : "";
 
-    return Column(children: [
-      Text(shouldWearMask ? "Oui 😷" : "Non 🎉", style: style),
-      SizedBox(height: 16),
-      Padding(
-        padding: const EdgeInsets.only(right: 8, left: 8),
-        child: Text(
-          shouldWearMask
-              ? "Le masque est obligatoire dans le secteur\n« $maskZoneName »"
-              : "Profitez bien, mais faîtes quand même attention 🙏",
-          style: TextStyle(fontSize: 18),
-          softWrap: true,
-          textAlign: TextAlign.center,
-        ),
-      )
-    ]);
+    return Column(
+      children: [
+        Text(shouldWearMask ? "Oui 😷" : "Non 🎉", style: style),
+        SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.only(right: 8, left: 8),
+          child: Text(
+            shouldWearMask
+                ? "Le masque est obligatoire dans le secteur\n« $maskZoneName »"
+                : "Profitez bien, mais faîtes attention quand même 🙏",
+            style: TextStyle(fontSize: 18),
+            softWrap: true,
+            textAlign: TextAlign.center,
+          ),
+        )
+      ],
+    );
   }
 }
 
@@ -462,9 +526,14 @@ class _MapPageState extends State<MapPage> {
 
   @override
   void initState() {
-    mapController = MapController();
-    loadData();
     super.initState();
+    mapController = MapController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    loadData();
   }
 
   @override
